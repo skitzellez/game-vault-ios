@@ -234,8 +234,7 @@ actor ArcadeNames {
         }
         var m: [String: String] = [:]
         var name: String?
-        for raw in (text ?? "").split(separator: "
-") {
+        for raw in (text ?? "").split(whereSeparator: \.isNewline) {
             let line = raw.trimmingCharacters(in: .whitespaces)
             if line.hasPrefix("name \""), name == nil {
                 name = String(line.dropFirst(6).dropLast()).lowercased()

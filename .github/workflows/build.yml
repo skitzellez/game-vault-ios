@@ -25,10 +25,13 @@ jobs:
         run: xcodegen generate
       - name: Build
         run: |
-          xcodebuild -project GameVault.xcodeproj -target GameVault -configuration Release -sdk iphoneos \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | tee build.log | \
-            grep -E "error:|warning: .*Sources/|BUILD (SUCCEEDED|FAILED)" || true
-          test -d build/Release-iphoneos/GameVault.app
+          if ! xcodebuild -project GameVault.xcodeproj -target GameVault -configuration Release -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build > build.log 2>&1; then
+            grep -E "error:" build.log | head -40
+            exit 1
+          fi
+          grep -E "warning: .*Sources/" build.log | sort -u | head -40 || true
+          echo "BUILD SUCCEEDED"
       - name: Package
         run: ./scripts/make_ipa.sh build/Release-iphoneos/GameVault.app Cores GameVault-iOS.ipa
       - uses: actions/upload-artifact@v4
