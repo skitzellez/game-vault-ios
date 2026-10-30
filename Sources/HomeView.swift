@@ -82,7 +82,7 @@ struct HomeView: View {
             MenuButton(title: "Pick my games folder", icon: "folder", accent: Theme.blue) { picking = true }
             Text("Or copy games into Files › On My iPhone › Game Vault › Games.")
                 .font(Theme.body(13)).foregroundStyle(Theme.dim)
-            Text("Plays NES, Super Nintendo, Game Boy, Game Boy Color, Game Boy Advance, PlayStation, Genesis, Master System, Game Gear, TurboGrafx-16, Atari 2600, Lynx and Virtual Boy.")
+            Text("Plays " + Systems.all.map(\.name).joined(separator: ", ") + ".")
                 .font(Theme.body(12)).foregroundStyle(Theme.dim.opacity(0.8))
         }
         .padding(20)

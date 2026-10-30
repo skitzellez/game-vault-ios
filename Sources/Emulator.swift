@@ -47,7 +47,18 @@ final class Emulator: ObservableObject {
     func start() {
         guard !running else { return }
         guard let frameworks = Bundle.main.privateFrameworksURL else { error = "Game Vault is damaged."; return }
-        let core = frameworks.appendingPathComponent(game.system.core + ".framework/" + game.system.core)
+        let sys = game.system
+        let have = { (names: [String]) in
+            names.contains { FileManager.default.fileExists(atPath: self.library.biosFolder.appendingPathComponent($0).path) }
+        }
+        if !sys.bios.isEmpty && !have(sys.bios) {
+            error = "\(sys.name) games need the system's BIOS file (\(sys.bios.joined(separator: " or "))). " +
+                "Put it in Files › On My iPhone › Game Vault › BIOS."
+            return
+        }
+        var coreName = sys.core
+        if let better = sys.betterCore, have(better.bios) { coreName = better.core }
+        let core = frameworks.appendingPathComponent(coreName + ".framework/" + coreName)
         var path = game.url
         if let entry = game.zipEntry {
             let dir = FileManager.default.temporaryDirectory.appendingPathComponent("game", isDirectory: true)

@@ -11,6 +11,7 @@ struct Game: Identifiable, Hashable {
     let title: String
     let system: GameSystem
     var zipEntry: String? = nil   // the game file inside a .zip
+    var artName: String? = nil    // the name its box art has on the server, when not the file's name (arcade sets)
 
     var id: String { url.path }
     var fileStem: String { url.deletingPathExtension().lastPathComponent }
@@ -104,7 +105,17 @@ final class Library: ObservableObject {
     func scan() async {
         scanning = true
         let roots = [gamesFolder] + folders
-        let found = await Task.detached(priority: .userInitiated) { Library.find(in: roots) }.value
+        var found = await Task.detached(priority: .userInitiated) { Library.find(in: roots) }.value
+        if found.contains(where: { $0.system.code == "ARC" }) {
+            let names = await ArcadeNames.shared.titles()
+            for i in found.indices where found[i].system.code == "ARC" {
+                if let full = names[found[i].fileStem.lowercased()] {
+                    found[i] = Game(url: found[i].url, title: Library.cleanTitle(full), system: found[i].system,
+                                    artName: full)
+                }
+            }
+            found.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        }
         games = found
         scanning = false
     }
@@ -128,9 +139,20 @@ final class Library: ObservableObject {
                 let ext = url.pathExtension.lowercased()
                 let folders = url.deletingLastPathComponent().path.dropFirst(root.path.count)
                     .split(separator: "/").map(String.init)
+                let hint = Systems.byFolders(folders)
+                let stem = url.deletingPathExtension().lastPathComponent
                 var game: Game?
-                if ext == "zip" {
+                if ext == "zip", let s = hint, s.wholeZip {
+                    // an arcade set or a DOS game: the core opens the .zip itself
+                    if !(s.code == "ARC" && Systems.arcadeBios.contains(stem.lowercased())) {
+                        game = Game(url: url, title: cleanTitle(stem), system: s)
+                    }
+                } else if ext == "zip" {
                     game = zipGame(url, folders)
+                } else if Systems.discExtensions.contains(ext) {
+                    // a disc: the system its folder names when that system has discs, else PlayStation
+                    let s = hint.flatMap { $0.discs ? $0 : nil } ?? Systems.byCode("PS1")!
+                    game = Game(url: url, title: cleanTitle(stem), system: s)
                 } else if let s = Systems.byExtension(ext) {
                     game = Game(url: url, title: cleanTitle(url.deletingPathExtension().lastPathComponent), system: s)
                 } else if ext == "bin", let s = Systems.byFolders(folders), s.code != "PS1" {
@@ -190,5 +212,40 @@ final class Library: ObservableObject {
         s = s.replacingOccurrences(of: "\\s*[\\(\\[][^\\)\\]]*[\\)\\]]", with: "", options: .regularExpression)
         s = s.trimmingCharacters(in: .whitespaces)
         return s.isEmpty ? stem : s
+    }
+}
+
+// Arcade sets are named "sf2", "mslug"...: their real titles come from FinalBurn Neo's list in the libretro database
+// (the same list the Xbox Game Vault reads), kept in Caches after the first download.
+actor ArcadeNames {
+    static let shared = ArcadeNames()
+    private var map: [String: String]?
+
+    func titles() async -> [String: String] {
+        if let m = map { return m }
+        let file = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("fbneo.dat")
+        var text = try? String(contentsOf: file, encoding: .utf8)
+        if text == nil, let url = URL(string: "https://raw.githubusercontent.com/libretro/libretro-database/master/" +
+                                      "metadat/fbneo-split/FBNeo%20-%20Arcade%20Games.dat"),
+           let got = try? await URLSession.shared.data(from: url) {
+            text = String(decoding: got.0, as: UTF8.self)
+            try? text?.write(to: file, atomically: true, encoding: .utf8)
+        }
+        var m: [String: String] = [:]
+        var name: String?
+        for raw in (text ?? "").split(separator: "
+") {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("name \""), name == nil {
+                name = String(line.dropFirst(6).dropLast()).lowercased()
+            } else if line.hasPrefix("description \""), let n = name {
+                m[n] = String(line.dropFirst(13).dropLast())
+            } else if line == ")" {
+                name = nil
+            }
+        }
+        map = m
+        return m
     }
 }

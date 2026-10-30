@@ -26,7 +26,7 @@ actor Art {
         if FileManager.default.fileExists(atPath: none.path) { missing.insert(key); return nil }
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
-        var names = [Art.safe(game.fileStem)]
+        var names = [Art.safe(game.artName ?? game.fileStem)]
         if let match = await bestMatch(game), match != names[0] { names.append(match) }
         for name in names {
             guard let url = URL(string: Art.server + Art.path(game.system.thumbs) + "/Named_Boxarts/" +

@@ -59,6 +59,8 @@ struct TouchPad: View {
         switch layout {
         case .gba, .snes, .virtualBoy:
             return [Shoulder(label: "L", bit: Bit.l, left: true), Shoulder(label: "R", bit: Bit.r, left: false)]
+        case .saturn:
+            return [Shoulder(label: "L", bit: Bit.l2, left: true), Shoulder(label: "R", bit: Bit.r2, left: false)]
         case .playstation:
             return [Shoulder(label: "L1", bit: Bit.l, left: true), Shoulder(label: "L2", bit: Bit.l2, left: true),
                     Shoulder(label: "R1", bit: Bit.r, left: false), Shoulder(label: "R2", bit: Bit.r2, left: false)]
@@ -86,6 +88,20 @@ struct TouchPad: View {
             return [FaceButton(label: "A", bit: Bit.y, offset: CGSize(width: -1.1, height: 0.45)),
                     FaceButton(label: "B", bit: Bit.b, offset: CGSize(width: 0, height: 0)),
                     FaceButton(label: "C", bit: Bit.a, offset: CGSize(width: 1.1, height: -0.45))]
+        case .saturn:    // Yabause / Beetle Saturn: A = B, B = A, C = R, X = Y, Y = X, Z = L
+            return [FaceButton(label: "X", bit: Bit.y, offset: CGSize(width: -1.1, height: -0.55)),
+                    FaceButton(label: "Y", bit: Bit.x, offset: CGSize(width: 0, height: -0.85)),
+                    FaceButton(label: "Z", bit: Bit.l, offset: CGSize(width: 1.1, height: -1.15)),
+                    FaceButton(label: "A", bit: Bit.b, offset: CGSize(width: -1.1, height: 0.65)),
+                    FaceButton(label: "B", bit: Bit.a, offset: CGSize(width: 0, height: 0.35)),
+                    FaceButton(label: "C", bit: Bit.r, offset: CGSize(width: 1.1, height: 0.05))]
+        case .arcade:    // FinalBurn Neo: punches on top (Y X L), kicks below (B A R)
+            return [FaceButton(label: "1", bit: Bit.y, offset: CGSize(width: -1.1, height: -0.55)),
+                    FaceButton(label: "2", bit: Bit.x, offset: CGSize(width: 0, height: -0.85)),
+                    FaceButton(label: "3", bit: Bit.l, offset: CGSize(width: 1.1, height: -1.15)),
+                    FaceButton(label: "4", bit: Bit.b, offset: CGSize(width: -1.1, height: 0.65)),
+                    FaceButton(label: "5", bit: Bit.a, offset: CGSize(width: 0, height: 0.35)),
+                    FaceButton(label: "6", bit: Bit.r, offset: CGSize(width: 1.1, height: 0.05))]
         case .atari:
             return [FaceButton(label: "FIRE", bit: Bit.b, offset: .zero)]
         }
@@ -108,7 +124,11 @@ struct TouchPad: View {
 
     private var startSelect: some View {
         HStack(spacing: 14) {
-            PadButton(label: "SELECT", size: 30, round: false, wide: true) { press("select", $0 ? Bit.select : nil) }
+            if layout != .saturn {
+                PadButton(label: layout == .arcade ? "COIN" : "SELECT", size: 30, round: false, wide: true) {
+                    press("select", $0 ? Bit.select : nil)
+                }
+            }
             PadButton(label: "START", size: 30, round: false, wide: true) { press("start", $0 ? Bit.start : nil) }
         }
     }

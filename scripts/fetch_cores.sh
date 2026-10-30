@@ -8,7 +8,9 @@ OUT="$1"
 SERVER=https://buildbot.libretro.com/nightly/apple/ios-arm64/latest
 CORES="fceumm_libretro_ios snes9x_libretro_ios gambatte_libretro_ios mgba_libretro pcsx_rearmed_libretro_ios
 genesis_plus_gx_libretro_ios mednafen_pce_fast_libretro_ios stella_libretro_ios handy_libretro_ios
-mednafen_vb_libretro_ios"
+mednafen_vb_libretro_ios picodrive_libretro_ios fbneo_libretro_ios yabause_libretro_ios mednafen_saturn_libretro_ios
+mednafen_ngp_libretro_ios mednafen_wswan_libretro_ios a5200_libretro_ios prosystem_libretro_ios gearcoleco_libretro_ios
+pokemini_libretro_ios dosbox_pure_libretro_ios"
 mkdir -p "$OUT"
 TMP=$(mktemp -d)
 for c in $CORES; do
