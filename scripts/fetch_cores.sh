@@ -10,7 +10,7 @@ CORES="fceumm_libretro_ios snes9x_libretro_ios gambatte_libretro_ios mgba_libret
 genesis_plus_gx_libretro_ios mednafen_pce_fast_libretro_ios stella_libretro_ios handy_libretro_ios
 mednafen_vb_libretro_ios picodrive_libretro_ios fbneo_libretro_ios yabause_libretro_ios mednafen_saturn_libretro_ios
 mednafen_ngp_libretro_ios mednafen_wswan_libretro_ios a5200_libretro_ios prosystem_libretro_ios gearcoleco_libretro_ios
-pokemini_libretro_ios dosbox_pure_libretro_ios"
+pokemini_libretro_ios dosbox_pure_libretro_ios mupen64plus_next_libretro_ios ppsspp_libretro desmume_libretro_ios"
 mkdir -p "$OUT"
 TMP=$(mktemp -d)
 for c in $CORES; do
@@ -38,3 +38,8 @@ for c in $CORES; do
 PLIST
   echo "$name: $(shasum -a 256 "$fw/$name" | cut -c1-16) $(stat -f%z "$fw/$name") bytes"
 done
+# PPSSPP's own files (fonts, the PSP's flash0): put in the app, copied to BIOS/PPSSPP on first start
+curl -sfL --retry 3 https://buildbot.libretro.com/assets/system/PPSSPP.zip -o "$TMP/PPSSPP.zip"
+rm -rf "$OUT/PPSSPP"
+unzip -oq "$TMP/PPSSPP.zip" -d "$OUT"
+test -d "$OUT/PPSSPP" && echo "PPSSPP files: $(find "$OUT/PPSSPP" -type f | wc -l)"

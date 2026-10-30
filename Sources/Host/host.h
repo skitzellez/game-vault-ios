@@ -22,6 +22,8 @@ float gv_aspect(void);
 const uint32_t *gv_frame(unsigned *width, unsigned *height, unsigned *serial);
 
 void gv_set_buttons(unsigned port, uint16_t mask);   // bit n = RETRO_DEVICE_ID_JOYPAD n
+void gv_set_analog(unsigned port, unsigned stick, int16_t x, int16_t y);   // stick 0 left, 1 right; y down = +
+void gv_set_pointer(int16_t x, int16_t y, int down);   // -32767..32767 over the whole picture
 size_t gv_audio_read(int16_t *out, size_t frames);   // stereo, interleaved; called from the sound thread
 size_t gv_audio_queued(void);
 

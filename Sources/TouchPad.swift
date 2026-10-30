@@ -15,12 +15,14 @@ private struct FaceButton {
     let label: String
     let bit: Int
     let offset: CGSize   // from the middle of the button cluster, in button sizes
+    var scale: CGFloat = 1
 }
 
 struct TouchPad: View {
     let layout: PadLayout
     let landscape: Bool
     let onChange: (UInt16) -> Void
+    var onStick: (CGFloat, CGFloat) -> Void = { _, _ in }   // -1...1, down is +
 
     @State private var held: [String: UInt16] = [:]   // per control: the bits its finger holds
 
@@ -38,7 +40,7 @@ struct TouchPad: View {
             }
             Spacer()
             HStack(alignment: .bottom) {
-                dpad(size: size * 2.4)
+                leftSide(size: size)
                 Spacer()
                 if !landscape { startSelect }
                 Spacer()
@@ -57,8 +59,11 @@ struct TouchPad: View {
 
     private var shoulders: [Shoulder] {
         switch layout {
-        case .gba, .snes, .virtualBoy:
+        case .gba, .snes, .virtualBoy, .psp, .ds:
             return [Shoulder(label: "L", bit: Bit.l, left: true), Shoulder(label: "R", bit: Bit.r, left: false)]
+        case .n64:   // Mupen64Plus-Next: Z = L2, L = Select, R = R2
+            return [Shoulder(label: "Z", bit: Bit.l2, left: true), Shoulder(label: "L", bit: Bit.select, left: true),
+                    Shoulder(label: "R", bit: Bit.r2, left: false)]
         case .saturn:
             return [Shoulder(label: "L", bit: Bit.l2, left: true), Shoulder(label: "R", bit: Bit.r2, left: false)]
         case .playstation:
@@ -74,12 +79,19 @@ struct TouchPad: View {
         case .twoButtons, .gba, .virtualBoy:
             return [FaceButton(label: "B", bit: Bit.b, offset: CGSize(width: -0.6, height: 0.35)),
                     FaceButton(label: "A", bit: Bit.a, offset: CGSize(width: 0.6, height: -0.35))]
-        case .snes:
+        case .n64:       // A = B, B = Y; C buttons: up = X, down = A, left = L, right = R
+            return [FaceButton(label: "A", bit: Bit.b, offset: CGSize(width: -0.35, height: 0.75)),
+                    FaceButton(label: "B", bit: Bit.y, offset: CGSize(width: -1.25, height: 0.15)),
+                    FaceButton(label: "▲", bit: Bit.x, offset: CGSize(width: 0.85, height: -1.45), scale: 0.62),
+                    FaceButton(label: "▼", bit: Bit.a, offset: CGSize(width: 0.85, height: -0.35), scale: 0.62),
+                    FaceButton(label: "◀", bit: Bit.l, offset: CGSize(width: 0.3, height: -0.9), scale: 0.62),
+                    FaceButton(label: "▶", bit: Bit.r, offset: CGSize(width: 1.4, height: -0.9), scale: 0.62)]
+        case .snes, .ds:
             return [FaceButton(label: "X", bit: Bit.x, offset: CGSize(width: 0, height: -1)),
                     FaceButton(label: "A", bit: Bit.a, offset: CGSize(width: 1, height: 0)),
                     FaceButton(label: "B", bit: Bit.b, offset: CGSize(width: 0, height: 1)),
                     FaceButton(label: "Y", bit: Bit.y, offset: CGSize(width: -1, height: 0))]
-        case .playstation:
+        case .playstation, .psp:
             return [FaceButton(label: "△", bit: Bit.x, offset: CGSize(width: 0, height: -1)),
                     FaceButton(label: "○", bit: Bit.a, offset: CGSize(width: 1, height: 0)),
                     FaceButton(label: "✕", bit: Bit.b, offset: CGSize(width: 0, height: 1)),
@@ -111,7 +123,9 @@ struct TouchPad: View {
         let box = size * 3.2
         return ZStack {
             ForEach(faces, id: \.label) { f in
-                PadButton(label: f.label, size: size, round: true) { press("face-" + f.label, $0 ? f.bit : nil) }
+                PadButton(label: f.label, size: size * f.scale, round: true) {
+                    press("face-" + f.label, $0 ? f.bit : nil)
+                }
                     .offset(x: f.offset.width * size * 1.05, y: f.offset.height * size * 1.05)
             }
         }
@@ -124,12 +138,27 @@ struct TouchPad: View {
 
     private var startSelect: some View {
         HStack(spacing: 14) {
-            if layout != .saturn {
+            if layout != .saturn && layout != .n64 {
                 PadButton(label: layout == .arcade ? "COIN" : "SELECT", size: 30, round: false, wide: true) {
                     press("select", $0 ? Bit.select : nil)
                 }
             }
             PadButton(label: "START", size: 30, round: false, wide: true) { press("start", $0 ? Bit.start : nil) }
+        }
+    }
+
+    @ViewBuilder
+    private func leftSide(size: CGFloat) -> some View {
+        switch layout {
+        case .n64:
+            AnalogStick(size: size * 2.4, onChange: onStick)
+        case .psp:
+            VStack(spacing: 10) {
+                AnalogStick(size: size * 1.7, onChange: onStick)
+                dpad(size: size * 2.0)
+            }
+        default:
+            dpad(size: size * 2.4)
         }
     }
 
@@ -214,4 +243,38 @@ private struct DPad: View {
 
     // arrow i: 0 up, 1 right, 2 down, 3 left
     private func lit(_ i: Int) -> Bool { dirs.contains([4, 7, 5, 6][i]) }
+}
+
+// A thumbstick: the knob follows the finger inside the ring; the middle is still.
+private struct AnalogStick: View {
+    let size: CGFloat
+    let onChange: (CGFloat, CGFloat) -> Void
+    @State private var knob: CGSize = .zero
+
+    var body: some View {
+        ZStack {
+            Circle().fill(Color.white.opacity(0.06))
+            Circle().stroke(Theme.blue.opacity(0.3), lineWidth: 1.5)
+            Circle()
+                .fill(Color.white.opacity(knob == .zero ? 0.18 : 0.32))
+                .overlay(Circle().stroke(Theme.blue.opacity(0.7), lineWidth: 1.5))
+                .frame(width: size * 0.42, height: size * 0.42)
+                .offset(knob)
+        }
+        .frame(width: size, height: size)
+        .contentShape(Circle())
+        .gesture(DragGesture(minimumDistance: 0)
+            .onChanged { v in
+                let r = size * 0.38
+                var dx = v.location.x - size / 2, dy = v.location.y - size / 2
+                let d = hypot(dx, dy)
+                if d > r { dx *= r / d; dy *= r / d }
+                knob = CGSize(width: dx, height: dy)
+                onChange(dx / r, dy / r)
+            }
+            .onEnded { _ in
+                knob = .zero
+                onChange(0, 0)
+            })
+    }
 }

@@ -40,6 +40,12 @@ final class Library: ObservableObject {
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
         recent = UserDefaults.standard.stringArray(forKey: recentKey) ?? []
+        // the PSP emulator's own files travel in the app and live with the BIOS files
+        let ppsspp = biosFolder.appendingPathComponent("PPSSPP", isDirectory: true)
+        if let inApp = Bundle.main.url(forResource: "PPSSPP", withExtension: nil),
+           !FileManager.default.fileExists(atPath: ppsspp.path) {
+            try? FileManager.default.copyItem(at: inApp, to: ppsspp)
+        }
         folders = loadBookmarks()
     }
 
@@ -150,9 +156,11 @@ final class Library: ObservableObject {
                 } else if ext == "zip" {
                     game = zipGame(url, folders)
                 } else if Systems.discExtensions.contains(ext) {
-                    // a disc: the system its folder names when that system has discs, else PlayStation
-                    let s = hint.flatMap { $0.discs ? $0 : nil } ?? Systems.byCode("PS1")!
-                    game = Game(url: url, title: cleanTitle(stem), system: s)
+                    // a disc: the system its folder names when that system has discs, else by its extension
+                    // (.cue / .chd / .pbp PlayStation, .iso / .cso PSP)
+                    if let s = hint.flatMap({ $0.discs ? $0 : nil }) ?? Systems.byExtension(ext) {
+                        game = Game(url: url, title: cleanTitle(stem), system: s)
+                    }
                 } else if let s = Systems.byExtension(ext) {
                     game = Game(url: url, title: cleanTitle(url.deletingPathExtension().lastPathComponent), system: s)
                 } else if ext == "bin", let s = Systems.byFolders(folders), s.code != "PS1" {

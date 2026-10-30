@@ -17,6 +17,7 @@ final class Emulator: ObservableObject {
     @Published var aspect: CGFloat = 4.0 / 3.0
 
     var touchMask: UInt16 = 0
+    var touchStick = CGPoint.zero   // -1...1, down is +
     weak var layer: CALayer?
 
     private var link: CADisplayLink?
@@ -128,6 +129,7 @@ final class Emulator: ObservableObject {
         lastTick = now
         if paused { return }
         gv_set_buttons(0, touchMask | controllerMask())
+        setSticks()
         let frameTime = 1.0 / gv_fps()
         due += dt
         // keep the sound queue between about 30 and 120 ms: a frame more or less now and then, never a gap
@@ -223,7 +225,33 @@ final class Emulator: ObservableObject {
         }
     }
 
+    // The sticks: a controller's two, else the touch stick on the left.
+    private func setSticks() {
+        func axis(_ v: Float) -> Int16 { Int16(max(-32767, min(32767, v * 32767))) }
+        var left = (x: Float(touchStick.x), y: Float(touchStick.y))
+        var right = (x: Float(0), y: Float(0))
+        for c in GCController.controllers() {
+            guard let p = c.extendedGamepad else { continue }
+            let lx = p.leftThumbstick.xAxis.value, ly = -p.leftThumbstick.yAxis.value
+            if abs(lx) > abs(left.x) || abs(ly) > abs(left.y) { left = (lx, ly) }
+            right = (p.rightThumbstick.xAxis.value, -p.rightThumbstick.yAxis.value)
+        }
+        gv_set_analog(0, 0, axis(left.x), axis(left.y))
+        gv_set_analog(0, 1, axis(right.x), axis(right.y))
+    }
+
+    // A touch on the picture, 0...1 across and down (the DS bottom screen); nil = finger up.
+    func touchScreen(_ at: CGPoint?) {
+        guard let p = at else {
+            gv_set_pointer(0, 0, 0)
+            return
+        }
+        func scale(_ v: CGFloat) -> Int16 { Int16(max(-32767, min(32767, (v * 2 - 1) * 32767))) }
+        gv_set_pointer(scale(p.x), scale(p.y), 1)
+    }
+
     private func controllerMask() -> UInt16 {
+        let stickIsDpad = !game.system.analog
         var mask: UInt16 = 0
         for c in GCController.controllers() {
             guard let p = c.extendedGamepad else { continue }
@@ -233,10 +261,12 @@ final class Emulator: ObservableObject {
             set(p.buttonX.isPressed, 1)
             set(p.buttonOptions?.isPressed ?? false, 2)
             set(p.buttonMenu.isPressed, 3)
-            set(p.dpad.up.isPressed || p.leftThumbstick.yAxis.value > 0.5, 4)
-            set(p.dpad.down.isPressed || p.leftThumbstick.yAxis.value < -0.5, 5)
-            set(p.dpad.left.isPressed || p.leftThumbstick.xAxis.value < -0.5, 6)
-            set(p.dpad.right.isPressed || p.leftThumbstick.xAxis.value > 0.5, 7)
+            let sx = stickIsDpad ? p.leftThumbstick.xAxis.value : 0
+            let sy = stickIsDpad ? p.leftThumbstick.yAxis.value : 0
+            set(p.dpad.up.isPressed || sy > 0.5, 4)
+            set(p.dpad.down.isPressed || sy < -0.5, 5)
+            set(p.dpad.left.isPressed || sx < -0.5, 6)
+            set(p.dpad.right.isPressed || sx > 0.5, 7)
             set(p.buttonB.isPressed, 8)
             set(p.buttonY.isPressed, 9)
             set(p.leftShoulder.isPressed, 10)

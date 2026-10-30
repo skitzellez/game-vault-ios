@@ -16,6 +16,8 @@ struct GameSystem: Identifiable, Hashable {
     var wholeZip = false      // its .zip games go to the core as they are (arcade sets, DOS games)
     var bios: [String] = []   // it starts only with one of these in the BIOS folder
     var betterCore: (core: String, bios: [String])? = nil   // used instead when one of these BIOS files is there
+    var analog = false        // the left stick is a real stick (N64, PSP), not the d-pad
+    var touchScreen = false   // the picture takes touches (DS bottom screen)
 
     var id: String { code }
     static func == (a: GameSystem, b: GameSystem) -> Bool { a.code == b.code }
@@ -36,6 +38,9 @@ struct GameSystem: Identifiable, Hashable {
         case "PCE", "PCECD": return c(0.95, 0.45, 0.20)
         case "A26", "A52", "A78", "LYNX": return c(0.95, 0.50, 0.20)
         case "VB": return c(0.90, 0.18, 0.20)
+        case "N64": return c(0.95, 0.30, 0.25)
+        case "PSP": return c(0.75, 0.78, 0.85)
+        case "NDS": return c(0.90, 0.25, 0.30)
         case "ARC": return c(1.0, 0.22, 0.62)
         case "DOS": return c(0.98, 0.74, 0.18)
         default: return Theme.blue
@@ -54,6 +59,9 @@ enum PadLayout {
     case playstation     // cross circle square triangle L1 R1 L2 R2
     case atari           // one fire button
     case virtualBoy      // A B L R
+    case n64             // stick, A B, four C buttons, Z L R
+    case psp             // stick + d-pad, cross circle square triangle, L R
+    case ds              // A B X Y L R; the bottom screen is touched on the picture
 }
 
 enum Systems {
@@ -64,6 +72,13 @@ enum Systems {
         GameSystem(code: "SNES", name: "Super Nintendo", core: "snes9x_libretro", extensions: ["sfc", "smc"],
                    folderWords: ["snes", "super nintendo", "super famicom", "sfc"],
                    thumbs: "Nintendo - Super Nintendo Entertainment System", pad: .snes),
+        GameSystem(code: "N64", name: "Nintendo 64", core: "mupen64plus_next_libretro",
+                   extensions: ["z64", "n64", "v64"],
+                   folderWords: ["n64", "nintendo 64", "nintendo64"],
+                   thumbs: "Nintendo - Nintendo 64", pad: .n64, analog: true),
+        GameSystem(code: "NDS", name: "Nintendo DS", core: "desmume_libretro", extensions: ["nds"],
+                   folderWords: ["nds", "ds", "nintendo ds"],
+                   thumbs: "Nintendo - Nintendo DS", pad: .ds, touchScreen: true),
         GameSystem(code: "GBA", name: "Game Boy Advance", core: "mgba_libretro", extensions: ["gba"],
                    folderWords: ["gba", "game boy advance", "gameboy advance"],
                    thumbs: "Nintendo - Game Boy Advance", pad: .gba),
@@ -76,7 +91,10 @@ enum Systems {
         GameSystem(code: "PS1", name: "PlayStation", core: "pcsx_rearmed_libretro",
                    extensions: ["cue", "chd", "pbp", "m3u", "ccd"],
                    folderWords: ["ps1", "psx", "playstation", "psone"],
-                   thumbs: "Sony - PlayStation", pad: .playstation),
+                   thumbs: "Sony - PlayStation", pad: .playstation, discs: true),
+        GameSystem(code: "PSP", name: "PSP", core: "ppsspp_libretro", extensions: ["iso", "cso"],
+                   folderWords: ["psp", "playstation portable"],
+                   thumbs: "Sony - PlayStation Portable", pad: .psp, discs: true, analog: true),
         GameSystem(code: "SAT", name: "Saturn", core: "yabause_libretro", extensions: [],
                    folderWords: ["saturn", "sega saturn", "sat"],
                    thumbs: "Sega - Saturn", pad: .saturn, discs: true,
@@ -164,7 +182,7 @@ enum Systems {
         return nil
     }
 
-    static let discExtensions: Set<String> = ["cue", "chd", "m3u", "ccd"]
+    static let discExtensions: Set<String> = ["cue", "chd", "m3u", "ccd", "pbp", "iso", "cso"]
 
     // Arcade .zip files that are a BIOS or shared parts, not a game.
     static let arcadeBios: Set<String> = ["neogeo", "pgm", "skns", "decocass", "isgsm", "nmk004", "qsound", "ym2608",

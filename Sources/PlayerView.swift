@@ -28,7 +28,9 @@ struct PlayerView: View {
                     }
                 }
                 if !emu.hasController && emu.error == nil {
-                    TouchPad(layout: emu.game.system.pad, landscape: landscape) { emu.touchMask = $0 }
+                    TouchPad(layout: emu.game.system.pad, landscape: landscape,
+                             onChange: { emu.touchMask = $0 },
+                             onStick: { emu.touchStick = CGPoint(x: $0, y: $1) })
                 }
                 VStack {
                     HStack {
@@ -61,7 +63,21 @@ struct PlayerView: View {
     }
 
     private var screen: some View {
-        GameScreen(emu: emu).aspectRatio(emu.aspect, contentMode: .fit)
+        GameScreen(emu: emu)
+            .aspectRatio(emu.aspect, contentMode: .fit)
+            .overlay {
+                if emu.game.system.touchScreen {
+                    GeometryReader { g in
+                        Color.clear.contentShape(Rectangle())
+                            .gesture(DragGesture(minimumDistance: 0)
+                                .onChanged { v in
+                                    emu.touchScreen(CGPoint(x: v.location.x / g.size.width,
+                                                            y: v.location.y / g.size.height))
+                                }
+                                .onEnded { _ in emu.touchScreen(nil) })
+                    }
+                }
+            }
     }
 
     private var menu: some View {

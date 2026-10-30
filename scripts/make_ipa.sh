@@ -10,6 +10,7 @@ mkdir -p "$TMP/Payload"
 cp -R "$APP" "$TMP/Payload/"
 mkdir -p "$TMP/Payload/GameVault.app/Frameworks"
 cp -R "$CORES"/*.framework "$TMP/Payload/GameVault.app/Frameworks/"
+if [ -d "$CORES/PPSSPP" ]; then cp -R "$CORES/PPSSPP" "$TMP/Payload/GameVault.app/"; fi
 rm -f "$OUT"
 (cd "$TMP" && zip -qry "$OUT" Payload)
 ls -l "$OUT"
