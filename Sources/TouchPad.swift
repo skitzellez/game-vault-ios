@@ -23,6 +23,7 @@ struct TouchPad: View {
     let landscape: Bool
     let onChange: (UInt16) -> Void
     var onStick: (CGFloat, CGFloat) -> Void = { _, _ in }   // -1...1, down is +
+    var onStick2: (CGFloat, CGFloat) -> Void = { _, _ in }  // the right stick (remote play)
 
     @State private var held: [String: UInt16] = [:]   // per control: the bits its finger holds
 
@@ -59,6 +60,9 @@ struct TouchPad: View {
 
     private var shoulders: [Shoulder] {
         switch layout {
+        case .xbox:
+            return [Shoulder(label: "LT", bit: Bit.l2, left: true), Shoulder(label: "LB", bit: Bit.l, left: true),
+                    Shoulder(label: "RT", bit: Bit.r2, left: false), Shoulder(label: "RB", bit: Bit.r, left: false)]
         case .gba, .snes, .virtualBoy, .psp, .ds:
             return [Shoulder(label: "L", bit: Bit.l, left: true), Shoulder(label: "R", bit: Bit.r, left: false)]
         case .n64:   // Mupen64Plus-Next: Z = L2, L = Select, R = R2
@@ -86,6 +90,11 @@ struct TouchPad: View {
                     FaceButton(label: "▼", bit: Bit.a, offset: CGSize(width: 0.85, height: -0.35), scale: 0.62),
                     FaceButton(label: "◀", bit: Bit.l, offset: CGSize(width: 0.3, height: -0.9), scale: 0.62),
                     FaceButton(label: "▶", bit: Bit.r, offset: CGSize(width: 1.4, height: -0.9), scale: 0.62)]
+        case .xbox:      // the Xbox's own places: Y top, B right, A bottom, X left
+            return [FaceButton(label: "Y", bit: Bit.x, offset: CGSize(width: 0, height: -1)),
+                    FaceButton(label: "B", bit: Bit.a, offset: CGSize(width: 1, height: 0)),
+                    FaceButton(label: "A", bit: Bit.b, offset: CGSize(width: 0, height: 1)),
+                    FaceButton(label: "X", bit: Bit.y, offset: CGSize(width: -1, height: 0))]
         case .snes, .ds:
             return [FaceButton(label: "X", bit: Bit.x, offset: CGSize(width: 0, height: -1)),
                     FaceButton(label: "A", bit: Bit.a, offset: CGSize(width: 1, height: 0)),
@@ -119,7 +128,19 @@ struct TouchPad: View {
         }
     }
 
+    @ViewBuilder
     private func face(size: CGFloat) -> some View {
+        if layout == .xbox {
+            VStack(spacing: 10) {
+                AnalogStick(size: size * 1.7, onChange: onStick2)
+                faceButtons(size: size)
+            }
+        } else {
+            faceButtons(size: size)
+        }
+    }
+
+    private func faceButtons(size: CGFloat) -> some View {
         let box = size * 3.2
         return ZStack {
             ForEach(faces, id: \.label) { f in
@@ -139,11 +160,14 @@ struct TouchPad: View {
     private var startSelect: some View {
         HStack(spacing: 14) {
             if layout != .saturn && layout != .n64 {
-                PadButton(label: layout == .arcade ? "COIN" : "SELECT", size: 30, round: false, wide: true) {
+                PadButton(label: layout == .arcade ? "COIN" : layout == .xbox ? "VIEW" : "SELECT", size: 30,
+                          round: false, wide: true) {
                     press("select", $0 ? Bit.select : nil)
                 }
             }
-            PadButton(label: "START", size: 30, round: false, wide: true) { press("start", $0 ? Bit.start : nil) }
+            PadButton(label: layout == .xbox ? "MENU" : "START", size: 30, round: false, wide: true) {
+                press("start", $0 ? Bit.start : nil)
+            }
         }
     }
 
@@ -152,7 +176,7 @@ struct TouchPad: View {
         switch layout {
         case .n64:
             AnalogStick(size: size * 2.4, onChange: onStick)
-        case .psp:
+        case .psp, .xbox:
             VStack(spacing: 10) {
                 AnalogStick(size: size * 1.7, onChange: onStick)
                 dpad(size: size * 2.0)

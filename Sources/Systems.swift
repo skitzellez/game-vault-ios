@@ -62,6 +62,7 @@ enum PadLayout {
     case n64             // stick, A B, four C buttons, Z L R
     case psp             // stick + d-pad, cross circle square triangle, L R
     case ds              // A B X Y L R; the bottom screen is touched on the picture
+    case xbox            // remote play: two sticks, d-pad, A B X Y, LB RB LT RT, View Menu
 }
 
 enum Systems {

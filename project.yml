@@ -9,7 +9,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.3.0"
+    MARKETING_VERSION: "0.4.0"
     CURRENT_PROJECT_VERSION: "1"
 targets:
   GameVault:
@@ -41,6 +41,12 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         GCSupportsControllerUserInteraction: true
+        CFBundleURLTypes:
+          - CFBundleURLName: com.skitzelles.gamevault.link
+            CFBundleURLSchemes: [gamevault]
+        NSLocalNetworkUsageDescription: Game Vault talks to Game Vault on your Xbox to play its games on this iPhone.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         GCSupportedGameControllers:
           - ProfileName: ExtendedGamepad
     settings:

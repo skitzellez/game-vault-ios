@@ -11,13 +11,16 @@ struct GameVaultApp: App {
         WindowGroup {
             HomeView()
                 .preferredColorScheme(.dark)
+                .onOpenURL { url in VaultLink.shared.accept(url) }
         }
     }
 }
 
 struct HomeView: View {
     @ObservedObject private var library = Library.shared
+    @ObservedObject private var xbox = VaultLink.shared
     @State private var playing: Game?
+    @State private var remote: RemoteGame?
     @State private var picking = false
     @State private var showFolders = false
 
@@ -27,6 +30,7 @@ struct HomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 26) {
                     header
+                    if xbox.link != nil { fromXbox }
                     if library.games.isEmpty {
                         empty
                     } else {
@@ -37,15 +41,22 @@ struct HomeView: View {
                 .padding(.horizontal, 18)
                 .padding(.bottom, 40)
             }
-            .refreshable { await library.scan() }
+            .refreshable {
+                await library.scan()
+                await xbox.refresh()
+            }
         }
         .task { await library.scan() }
+        .task { await xbox.refresh() }
         .fileImporter(isPresented: $picking, allowedContentTypes: [.folder]) { result in
             if case .success(let url) = result { library.addFolder(url) }
         }
         .sheet(isPresented: $showFolders) { FoldersView(picking: $picking) }
         .fullScreenCover(item: $playing, onDismiss: { Task { await library.scan() } }) { game in
             PlayerView(game: game)
+        }
+        .fullScreenCover(item: $remote) { game in
+            RemoteView(game: game)
         }
     }
 
@@ -87,6 +98,38 @@ struct HomeView: View {
         }
         .padding(20)
         .background(Theme.panel, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    // FROM XBOX: the linked Xbox's games, played there and shown here (remote play).
+    private var fromXbox: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("FROM XBOX").font(Theme.body(15)).tracking(1.5)
+                    .foregroundStyle(Color(red: 0.16, green: 0.78, blue: 0.22))
+                Text(xbox.reachable ? xbox.console : "not reachable").font(Theme.body(13)).foregroundStyle(Theme.dim)
+            }
+            if !xbox.reachable {
+                Text("Open Game Vault on the Xbox and keep this iPhone on the same Wi-Fi, then pull down to refresh.")
+                    .font(Theme.body(13)).foregroundStyle(Theme.dim)
+            } else if xbox.games.isEmpty {
+                Text("No games on the Xbox can be played from here yet.").font(Theme.body(13)).foregroundStyle(Theme.dim)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(alignment: .top, spacing: 12) {
+                        ForEach(xbox.games) { game in
+                            Button { remote = game } label: {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    RemoteCoverView(game: game).frame(width: 118)
+                                    Text(game.title).font(Theme.body(12)).foregroundStyle(Theme.ink).lineLimit(2)
+                                        .frame(width: 118, alignment: .leading)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private func continueCard(_ game: Game) -> some View {
@@ -153,6 +196,7 @@ struct HomeView: View {
 
 struct FoldersView: View {
     @ObservedObject private var library = Library.shared
+    @ObservedObject private var xbox = VaultLink.shared
     @Binding var picking: Bool
     @Environment(\.dismiss) private var dismiss
 
@@ -174,6 +218,18 @@ struct FoldersView: View {
                     dismiss()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { picking = true }
                 } label: { Label("Add a folder", systemImage: "plus") }
+                Section {
+                    if let l = xbox.link {
+                        Label("\(l.name) (\(l.host))", systemImage: "xbox.logo")
+                        Button("Unlink this Xbox", role: .destructive) { xbox.unlink() }
+                    } else {
+                        Text("On the Xbox, open Game Vault › Options › Network › Continue on your phone, and scan the code with this iPhone's camera.")
+                    }
+                } header: {
+                    Text("Your Xbox")
+                } footer: {
+                    Text("Linked, the Xbox's games show on FROM XBOX: the Xbox plays them, this iPhone shows them and is the controller. Same Wi-Fi only.")
+                }
             }
             .navigationTitle("Folders")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
