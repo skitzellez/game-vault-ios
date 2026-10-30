@@ -1,0 +1,46 @@
+# Copyright (c) 2026 Skitzelles - part of Game Vault, https://github.com/skitzellez/xbox-game-vault
+# PolyForm Noncommercial License 1.0.0: not for sale, and this notice stays in every copy.
+# Game Vault for iPhone - every push builds the .ipa on a GitHub Mac; a tag "ios-x.y.z" also makes a release.
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["ios-*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ipa:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: brew install xcodegen
+      - name: Emulators
+        run: ./scripts/fetch_cores.sh Cores
+      - name: Project
+        run: xcodegen generate
+      - name: Build
+        run: |
+          xcodebuild -project GameVault.xcodeproj -target GameVault -configuration Release -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | tee build.log | \
+            grep -E "error:|warning: .*Sources/|BUILD (SUCCEEDED|FAILED)" || true
+          test -d build/Release-iphoneos/GameVault.app
+      - name: Package
+        run: ./scripts/make_ipa.sh build/Release-iphoneos/GameVault.app Cores GameVault-iOS.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GameVault-iOS
+          path: GameVault-iOS.ipa
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/ios-')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=${GITHUB_REF_NAME#ios-}
+          cp GameVault-iOS.ipa "GameVault-iOS_$v.ipa"
+          gh release create "$GITHUB_REF_NAME" "GameVault-iOS_$v.ipa" --title "Game Vault for iPhone $v" \
+            --notes "Install with SideStore or AltStore." --prerelease

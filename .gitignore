@@ -1,0 +1,6 @@
+GameVault.xcodeproj/
+Sources/Info.plist
+Cores/
+build/
+*.ipa
+.DS_Store
