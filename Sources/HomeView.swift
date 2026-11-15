@@ -74,7 +74,7 @@ struct HomeView: View {
             }
             Spacer()
             Button { showFolders = true } label: {
-                Image(systemName: "folder.badge.plus")
+                Image(systemName: "gearshape.fill")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(Theme.ink)
                     .frame(width: 46, height: 46)
@@ -219,6 +219,13 @@ struct FoldersView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { picking = true }
                 } label: { Label("Add a folder", systemImage: "plus") }
                 Section {
+                    NavigationLink {
+                        XboxUpdateView()
+                    } label: { Label("Update my Xbox", systemImage: "arrow.down.circle") }
+                } footer: {
+                    Text("Installs new Game Vault and emulator releases on your Xbox from this iPhone.")
+                }
+                Section {
                     if let l = xbox.link {
                         Label("\(l.name) (\(l.host))", systemImage: "xbox.logo")
                         Button("Unlink this Xbox", role: .destructive) { xbox.unlink() }
@@ -231,7 +238,7 @@ struct FoldersView: View {
                     Text("Linked, the Xbox's games show on FROM XBOX: the Xbox plays them, this iPhone shows them and is the controller. Same Wi-Fi only.")
                 }
             }
-            .navigationTitle("Folders")
+            .navigationTitle("Settings")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
     }
