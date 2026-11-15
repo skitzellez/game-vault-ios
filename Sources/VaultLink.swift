@@ -73,13 +73,14 @@ final class VaultLink: ObservableObject {
     }
 
     // One request to the Xbox's Game Vault; nil when it cannot be reached.
-    func request(_ method: String, _ path: String, timeout: TimeInterval = 4) async -> (code: Int, body: Data)? {
+    func request(_ method: String, _ path: String, body: Data? = nil,
+                 timeout: TimeInterval = 4) async -> (code: Int, body: Data)? {
         guard let l = link, let url = URL(string: "http://\(l.host):\(l.port)\(path)") else { return nil }
         var req = URLRequest(url: url, timeoutInterval: timeout)
         req.httpMethod = method
         req.setValue(l.key, forHTTPHeaderField: "X-GV-Key")
         req.setValue("close", forHTTPHeaderField: "Connection")
-        if method == "POST" { req.httpBody = Data() }
+        if method == "POST" { req.httpBody = body ?? Data() }
         guard let got = try? await URLSession.shared.data(for: req),
               let http = got.1 as? HTTPURLResponse else { return nil }
         return (http.statusCode, got.0)

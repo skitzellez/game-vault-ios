@@ -60,7 +60,24 @@ final class Library: ObservableObject {
         recent.compactMap { id in games.first { $0.id == id } }
     }
 
+    // when each game was last played (the details page shows it)
+    func lastPlayed(_ game: Game) -> Date? {
+        (UserDefaults.standard.dictionary(forKey: "playedAt")?[game.id] as? Double).map { Date(timeIntervalSince1970: $0) }
+    }
+
+    func search(_ text: String) -> [Game] {
+        let words = text.lowercased().split(separator: " ")
+        return games.filter { g in
+            let t = (g.title + " " + g.system.name).lowercased()
+            return words.allSatisfy { t.contains($0) }
+        }
+    }
+
     func played(_ game: Game) {
+        var at = UserDefaults.standard.dictionary(forKey: "playedAt") ?? [:]
+        at[game.id] = Date().timeIntervalSince1970
+        UserDefaults.standard.set(at, forKey: "playedAt")
+        GVLog.line("play: \(game.title) (\(game.system.code), \(game.url.lastPathComponent))")
         recent.removeAll { $0 == game.id }
         recent.insert(game.id, at: 0)
         if recent.count > 12 { recent.removeLast(recent.count - 12) }

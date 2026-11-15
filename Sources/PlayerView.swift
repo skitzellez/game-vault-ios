@@ -30,7 +30,8 @@ struct PlayerView: View {
                 if !emu.hasController && emu.error == nil {
                     TouchPad(layout: emu.game.system.pad, landscape: landscape,
                              onChange: { emu.touchMask = $0 },
-                             onStick: { emu.touchStick = CGPoint(x: $0, y: $1) })
+                             onStick: { emu.touchStick = CGPoint(x: $0, y: $1) },
+                             system: emu.game.system.code)
                 }
                 VStack {
                     HStack {

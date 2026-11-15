@@ -78,6 +78,7 @@ final class Emulator: ObservableObject {
         let rc = gv_load(core.path, path.path, library.biosFolder.path, library.savesFolder.path, &why)
         if rc != 0 {
             error = why.map { String(cString: $0) } ?? "The game could not start."
+            GVLog.line("play: \(game.title) did not start: \(error ?? "")")
             return
         }
         running = true

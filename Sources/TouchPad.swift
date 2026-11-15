@@ -3,6 +3,8 @@
 // Game Vault for iPhone - the touch buttons: a d-pad on the left, the system's own buttons on the right (named and
 // placed like on its controller), Start/Select in the middle, shoulder buttons at the top corners. Every finger is its
 // own touch, so the d-pad and a button can be held together. A light tap of the phone on each press.
+// Each control can be moved, resized or taken away by the player (Settings > Edit touch controls, PadStore): one
+// layout per system, one for the phone held sideways and one upright.
 import SwiftUI
 import UIKit
 
@@ -24,6 +26,32 @@ struct TouchPad: View {
     let onChange: (UInt16) -> Void
     var onStick: (CGFloat, CGFloat) -> Void = { _, _ in }   // -1...1, down is +
     var onStick2: (CGFloat, CGFloat) -> Void = { _, _ in }  // the right stick (remote play)
+    var system = ""                                         // whose layout the player's changes are kept for
+    var editing = false                                     // the editor: drag, pinch and choose instead of press
+    var selected: Binding<String?> = .constant(nil)
+
+    private func edit(_ key: String) -> Editable {
+        Editable(key: key, system: system.isEmpty ? "\(layout)" : system, landscape: landscape, editing: editing,
+                 selected: selected)
+    }
+
+    // every control of this layout: its key and the name the editor shows
+    var controls: [(key: String, name: String)] {
+        var out: [(key: String, name: String)] = []
+        switch layout {
+        case .n64: out.append(("stick", "Stick"))
+        case .psp, .xbox: out += [("stick", "Stick"), ("dpad", "D-pad")]
+        default: out.append(("dpad", "D-pad"))
+        }
+        if layout == .xbox { out.append(("stick2", "Right stick")) }
+        out += faces.map { ("face-" + $0.label, $0.label) }
+        out += shoulders.map { ("sh-" + $0.label, $0.label) }
+        if layout != .saturn && layout != .n64 {
+            out.append(("select", layout == .arcade ? "COIN" : layout == .xbox ? "VIEW" : "SELECT"))
+        }
+        out.append(("start", layout == .xbox ? "MENU" : "START"))
+        return out
+    }
 
     @State private var held: [String: UInt16] = [:]   // per control: the bits its finger holds
 
@@ -132,7 +160,7 @@ struct TouchPad: View {
     private func face(size: CGFloat) -> some View {
         if layout == .xbox {
             VStack(spacing: 10) {
-                AnalogStick(size: size * 1.7, onChange: onStick2)
+                AnalogStick(size: size * 1.7, onChange: onStick2).modifier(edit("stick2"))
                 faceButtons(size: size)
             }
         } else {
@@ -148,6 +176,7 @@ struct TouchPad: View {
                     press("face-" + f.label, $0 ? f.bit : nil)
                 }
                     .offset(x: f.offset.width * size * 1.05, y: f.offset.height * size * 1.05)
+                    .modifier(edit("face-" + f.label))
             }
         }
         .frame(width: box, height: box)
@@ -155,6 +184,7 @@ struct TouchPad: View {
 
     private func shoulder(_ s: Shoulder) -> some View {
         PadButton(label: s.label, size: 50, round: false) { press("sh-" + s.label, $0 ? s.bit : nil) }
+            .modifier(edit("sh-" + s.label))
     }
 
     private var startSelect: some View {
@@ -164,10 +194,12 @@ struct TouchPad: View {
                           round: false, wide: true) {
                     press("select", $0 ? Bit.select : nil)
                 }
+                .modifier(edit("select"))
             }
             PadButton(label: layout == .xbox ? "MENU" : "START", size: 30, round: false, wide: true) {
                 press("start", $0 ? Bit.start : nil)
             }
+            .modifier(edit("start"))
         }
     }
 
@@ -175,10 +207,10 @@ struct TouchPad: View {
     private func leftSide(size: CGFloat) -> some View {
         switch layout {
         case .n64:
-            AnalogStick(size: size * 2.4, onChange: onStick)
+            AnalogStick(size: size * 2.4, onChange: onStick).modifier(edit("stick"))
         case .psp, .xbox:
             VStack(spacing: 10) {
-                AnalogStick(size: size * 1.7, onChange: onStick)
+                AnalogStick(size: size * 1.7, onChange: onStick).modifier(edit("stick"))
                 dpad(size: size * 2.0)
             }
         default:
@@ -192,6 +224,7 @@ struct TouchPad: View {
             for d in dirs { bits |= 1 << UInt16(d) }
             set("dpad", bits)
         }
+        .modifier(edit("dpad"))
     }
 
     private func press(_ key: String, _ bit: Int?) {
@@ -300,5 +333,102 @@ private struct AnalogStick: View {
                 knob = .zero
                 onChange(0, 0)
             })
+    }
+}
+
+// ---- the player's own layout: for each control, how far it was moved, its size, and whether it was taken away
+struct PadItem: Codable, Equatable {
+    var dx: CGFloat = 0
+    var dy: CGFloat = 0
+    var scale: CGFloat = 1
+    var hidden = false
+}
+
+@MainActor
+final class PadStore: ObservableObject {
+    static let shared = PadStore()
+    @Published private var all: [String: [String: PadItem]]   // "<system>.<land|up>" -> control -> item
+    private let storeKey = "padLayouts"
+
+    private init() {
+        all = (UserDefaults.standard.data(forKey: storeKey)).flatMap {
+            try? JSONDecoder().decode([String: [String: PadItem]].self, from: $0)
+        } ?? [:]
+    }
+
+    private func name(_ system: String, _ landscape: Bool) -> String { system + (landscape ? ".land" : ".up") }
+
+    func item(_ system: String, _ landscape: Bool, _ key: String) -> PadItem {
+        all[name(system, landscape)]?[key] ?? PadItem()
+    }
+
+    func change(_ system: String, _ landscape: Bool, _ key: String, _ f: (inout PadItem) -> Void) {
+        var it = item(system, landscape, key)
+        f(&it)
+        all[name(system, landscape), default: [:]][key] = it
+        save()
+    }
+
+    func reset(_ system: String, _ landscape: Bool) {
+        all[name(system, landscape)] = nil
+        save()
+    }
+
+    func edited(_ system: String) -> Bool { all[name(system, true)] != nil || all[name(system, false)] != nil }
+
+    private func save() {
+        if let d = try? JSONEncoder().encode(all) { UserDefaults.standard.set(d, forKey: storeKey) }
+    }
+}
+
+// A control as the player placed it; in the editor it is dragged, pinched and chosen instead of pressed.
+struct Editable: ViewModifier {
+    let key: String
+    let system: String
+    let landscape: Bool
+    let editing: Bool
+    let selected: Binding<String?>
+    @ObservedObject private var store = PadStore.shared
+    @State private var drag: CGSize = .zero
+    @State private var pinch: CGFloat = 1
+
+    init(key: String, system: String, landscape: Bool, editing: Bool, selected: Binding<String?>) {
+        self.key = key
+        self.system = system
+        self.landscape = landscape
+        self.editing = editing
+        self.selected = selected
+    }
+
+    func body(content: Content) -> some View {
+        let it = store.item(system, landscape, key)
+        let chosen = selected.wrappedValue == key
+        content
+            .allowsHitTesting(!editing && !it.hidden)
+            .overlay {
+                if editing && !it.hidden {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(chosen ? Theme.blue : Color.white.opacity(0.35),
+                                style: StrokeStyle(lineWidth: chosen ? 2.5 : 1, dash: chosen ? [] : [5, 4]))
+                        .padding(-4)
+                        .contentShape(Rectangle())
+                        .gesture(DragGesture(minimumDistance: 2)
+                            .onChanged { v in drag = v.translation; selected.wrappedValue = key }
+                            .onEnded { v in
+                                store.change(system, landscape, key) { $0.dx += v.translation.width; $0.dy += v.translation.height }
+                                drag = .zero
+                            })
+                        .simultaneousGesture(MagnificationGesture()
+                            .onChanged { m in pinch = m; selected.wrappedValue = key }
+                            .onEnded { m in
+                                store.change(system, landscape, key) { $0.scale = min(2.2, max(0.5, $0.scale * m)) }
+                                pinch = 1
+                            })
+                        .onTapGesture { selected.wrappedValue = key }
+                }
+            }
+            .scaleEffect(min(2.2, max(0.5, it.scale * pinch)))
+            .opacity(it.hidden ? 0 : 1)
+            .offset(x: it.dx + drag.width, y: it.dy + drag.height)
     }
 }
