@@ -138,7 +138,10 @@ final class XboxUpdate: ObservableObject {
             let full = p["PackageFullName"] as? String ?? ""
             if let a = Self.apps.first(where: { full.hasPrefix($0.pkg + "_") }), let v = p["Version"] as? [String: Any] {
                 let n = { (k: String) in (v[k] as? NSNumber)?.intValue ?? 0 }
-                installed[a.pkg] = "\(n("Major")).\(n("Minor")).\(n("Build")).\(n("Revision"))"
+                let ver = "\(n("Major")).\(n("Minor")).\(n("Build")).\(n("Revision"))"
+                // the newest copy when the console lists two (one not yet started for the player)
+                if let old = installed[a.pkg], !Self.newer(ver, old) { continue }
+                installed[a.pkg] = ver
             }
         }
         // apps the player had: remembered, so one an update lost is put back
@@ -186,7 +189,27 @@ final class XboxUpdate: ObservableObject {
                 }
             }
             try? FileManager.default.removeItem(at: file)
-            if ok { done.append("\(a.title) \(want)") } else { failed.append(a.title) }
+            if ok {
+                // started once and closed again: only then does the console give the player the new copy (else
+                // Game Vault keeps finding the old one and shows the update again)
+                step = "Starting \(a.title) once on the Xbox…"
+                if let list = try? await portal.get("/api/app/packagemanager/packages")?["InstalledPackages"] as? [[String: Any]] {
+                    var best: (full: String, rel: String, ver: String)?
+                    for p in list {
+                        let full = p["PackageFullName"] as? String ?? ""
+                        guard full.hasPrefix(a.pkg + "_"), let v = p["Version"] as? [String: Any] else { continue }
+                        let n = { (k: String) in (v[k] as? NSNumber)?.intValue ?? 0 }
+                        let ver = "\(n("Major")).\(n("Minor")).\(n("Build")).\(n("Revision"))"
+                        if best == nil || Self.newer(ver, best!.ver) { best = (full, p["PackageRelativeId"] as? String ?? "", ver) }
+                    }
+                    if let b = best, !b.rel.isEmpty {
+                        _ = try? await portal.task("POST", query: "appid=\(Portal.b64(b.rel))&package=\(Portal.b64(b.full))")
+                        try? await Task.sleep(nanoseconds: 10_000_000_000)
+                        _ = try? await portal.task("DELETE", query: "package=\(Portal.b64(b.full))")
+                    }
+                }
+                done.append("\(a.title) \(want)")
+            } else { failed.append(a.title) }
         }
         var out: String
         if done.isEmpty && failed.isEmpty { out = "everything on the Xbox is up to date" }
@@ -314,6 +337,20 @@ private final class Portal: NSObject, URLSessionDelegate {
         r.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         let req = r
         let (_, h) = try await send { try await session.upload(for: req, fromFile: body) }
+        return (200...299).contains(h.statusCode)
+    }
+
+    // Device Portal's task manager: POST starts an app, DELETE stops it (both take the names in Base64)
+    static func b64(_ s: String) -> String {
+        Data(s.utf8).base64EncodedString().addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
+    }
+    func task(_ method: String, query: String) async throws -> Bool {
+        var r = request("/api/taskmanager/app?\(query)", timeout: 30)
+        r.httpMethod = method
+        r.setValue(cookies["CSRF-Token"] ?? "", forHTTPHeaderField: "X-CSRF-Token")
+        if method == "POST" { r.setValue("0", forHTTPHeaderField: "Content-Length"); r.httpBody = Data() }
+        let req = r
+        let (_, h) = try await send { try await session.data(for: req) }
         return (200...299).contains(h.statusCode)
     }
 }
